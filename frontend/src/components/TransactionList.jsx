@@ -1,174 +1,160 @@
-import { useState, useEffect } from 'react';
-import { transactionsAPI } from '../services/api';
+import React, { useState, useEffect } from 'react';
+import { transactionsAPI } from '../api/client';
 import { format } from 'date-fns';
+import TransactionForm from './TransactionForm';
 
-function TransactionList() {
+export default function TransactionList() {
     const [transactions, setTransactions] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [filters, setFilters] = useState({
-        type: '',
-        category: '',
-        start_date: '',
-        end_date: ''
-    });
+    const [showForm, setShowForm] = useState(false);
+    const [editingTransaction, setEditingTransaction] = useState(null);
+    const [filter, setFilter] = useState({ category: '', type: '' });
 
     useEffect(() => {
         fetchTransactions();
-    }, [filters]);
+    }, [filter]);
 
     const fetchTransactions = async () => {
         try {
             setLoading(true);
             const params = {};
-            if (filters.type) params.type = filters.type;
-            if (filters.category) params.category = filters.category;
-            if (filters.start_date) params.start_date = new Date(filters.start_date).toISOString();
-            if (filters.end_date) params.end_date = new Date(filters.end_date).toISOString();
+            if (filter.category) params.category = filter.category;
+            if (filter.type) params.type = filter.type;
 
             const response = await transactionsAPI.getAll(params);
             setTransactions(response.data);
         } catch (error) {
-            console.error('거래 내역 로드 실패:', error);
+            console.error('Failed to fetch transactions:', error);
         } finally {
             setLoading(false);
         }
     };
 
     const handleDelete = async (id) => {
-        if (!window.confirm('이 거래를 삭제하시겠습니까?')) return;
+        if (!confirm('이 거래를 삭제하시겠습니까?')) return;
 
         try {
             await transactionsAPI.delete(id);
             fetchTransactions();
         } catch (error) {
-            console.error('거래 삭제 실패:', error);
-            alert('거래 삭제에 실패했습니다.');
+            console.error('Failed to delete transaction:', error);
+            alert('삭제에 실패했습니다.');
         }
     };
 
-    const handleFilterChange = (e) => {
-        const { name, value } = e.target;
-        setFilters(prev => ({
-            ...prev,
-            [name]: value
-        }));
+    const handleEdit = (transaction) => {
+        setEditingTransaction(transaction);
+        setShowForm(true);
     };
 
-    const formatCurrency = (value) => {
+    const handleFormClose = () => {
+        setShowForm(false);
+        setEditingTransaction(null);
+        fetchTransactions();
+    };
+
+    const formatCurrency = (amount) => {
         return new Intl.NumberFormat('ko-KR', {
             style: 'currency',
-            currency: 'KRW'
-        }).format(value);
+            currency: 'KRW',
+        }).format(amount);
     };
 
-    const formatDate = (dateString) => {
-        return format(new Date(dateString), 'yyyy-MM-dd HH:mm');
-    };
-
-    // 카테고리 리스트 (중복 제거)
-    const categories = [...new Set(transactions.map(t => t.category))];
+    if (loading) {
+        return <div className="spinner"></div>;
+    }
 
     return (
-        <div className="transaction-list">
-            <h2 className="page-title">거래 내역</h2>
+        <div>
+            <div className="flex-between mb-4">
+                <h1 style={{ fontSize: '2rem', fontWeight: '700' }}>거래 내역</h1>
+                <button className="btn btn-primary" onClick={() => setShowForm(true)}>
+                    + 새 거래 추가
+                </button>
+            </div>
 
-            {/* 필터 */}
-            <div className="card" style={{ marginBottom: '1.5rem' }}>
-                <h3 className="card-title">필터</h3>
-                <div className="grid grid-4">
-                    <div className="input-group">
-                        <label className="input-label">거래 유형</label>
-                        <select name="type" value={filters.type} onChange={handleFilterChange} className="select">
+            {/* Filters */}
+            <div className="card mb-3">
+                <div className="flex gap-3">
+                    <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
+                        <label className="form-label">타입</label>
+                        <select
+                            className="form-select"
+                            value={filter.type}
+                            onChange={(e) => setFilter({ ...filter, type: e.target.value })}
+                        >
                             <option value="">전체</option>
                             <option value="income">수입</option>
                             <option value="expense">지출</option>
                         </select>
                     </div>
-
-                    <div className="input-group">
-                        <label className="input-label">카테고리</label>
-                        <select name="category" value={filters.category} onChange={handleFilterChange} className="select">
-                            <option value="">전체</option>
-                            {categories.map(cat => (
-                                <option key={cat} value={cat}>{cat}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div className="input-group">
-                        <label className="input-label">시작 날짜</label>
+                    <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
+                        <label className="form-label">카테고리</label>
                         <input
-                            type="date"
-                            name="start_date"
-                            value={filters.start_date}
-                            onChange={handleFilterChange}
-                            className="input"
-                        />
-                    </div>
-
-                    <div className="input-group">
-                        <label className="input-label">종료 날짜</label>
-                        <input
-                            type="date"
-                            name="end_date"
-                            value={filters.end_date}
-                            onChange={handleFilterChange}
-                            className="input"
+                            type="text"
+                            className="form-input"
+                            placeholder="카테고리 검색..."
+                            value={filter.category}
+                            onChange={(e) => setFilter({ ...filter, category: e.target.value })}
                         />
                     </div>
                 </div>
             </div>
 
-            {/* 거래 목록 */}
+            {/* Transactions Table */}
             <div className="card">
-                {loading ? (
-                    <div className="spinner"></div>
-                ) : transactions.length === 0 ? (
-                    <p style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '2rem' }}>
+                {transactions.length === 0 ? (
+                    <p className="text-center" style={{ color: 'var(--text-tertiary)', padding: 'var(--spacing-xl)' }}>
                         거래 내역이 없습니다.
                     </p>
                 ) : (
                     <div className="table-container">
-                        <table>
+                        <table className="table">
                             <thead>
                                 <tr>
                                     <th>날짜</th>
-                                    <th>유형</th>
+                                    <th>설명</th>
                                     <th>카테고리</th>
+                                    <th>타입</th>
                                     <th>금액</th>
-                                    <th>출처</th>
-                                    <th>메모</th>
+                                    <th>상태</th>
                                     <th>작업</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {transactions.map(transaction => (
+                                {transactions.map((transaction) => (
                                     <tr key={transaction.id}>
-                                        <td>{formatDate(transaction.date)}</td>
+                                        <td>{format(new Date(transaction.date), 'yyyy-MM-dd HH:mm')}</td>
+                                        <td>{transaction.description}</td>
+                                        <td>{transaction.category || '-'}</td>
                                         <td>
                                             <span className={`badge badge-${transaction.type}`}>
                                                 {transaction.type === 'income' ? '수입' : '지출'}
                                             </span>
                                         </td>
-                                        <td>{transaction.category}</td>
-                                        <td style={{
-                                            fontWeight: 600,
-                                            color: transaction.type === 'income' ? 'var(--accent-success)' : 'var(--accent-danger)'
-                                        }}>
-                                            {transaction.type === 'income' ? '+' : '-'} {formatCurrency(transaction.amount)}
-                                        </td>
-                                        <td>{transaction.source || '-'}</td>
-                                        <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                            {transaction.description || '-'}
+                                        <td style={{ fontWeight: '600', color: transaction.type === 'income' ? 'var(--success)' : 'var(--danger)' }}>
+                                            {transaction.type === 'income' ? '+' : '-'}{formatCurrency(transaction.amount)}
                                         </td>
                                         <td>
-                                            <button
-                                                onClick={() => handleDelete(transaction.id)}
-                                                className="btn btn-danger"
-                                                style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
-                                            >
-                                                삭제
-                                            </button>
+                                            <span className={`badge badge-${transaction.status}`}>
+                                                {transaction.status === 'completed' ? '완료' : '취소'}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div className="flex gap-1">
+                                                <button
+                                                    className="btn btn-secondary btn-sm"
+                                                    onClick={() => handleEdit(transaction)}
+                                                >
+                                                    수정
+                                                </button>
+                                                <button
+                                                    className="btn btn-danger btn-sm"
+                                                    onClick={() => handleDelete(transaction.id)}
+                                                >
+                                                    삭제
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
@@ -176,13 +162,15 @@ function TransactionList() {
                         </table>
                     </div>
                 )}
-
-                <div style={{ marginTop: '1rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                    총 {transactions.length}건의 거래
-                </div>
             </div>
+
+            {/* Transaction Form Modal */}
+            {showForm && (
+                <TransactionForm
+                    transaction={editingTransaction}
+                    onClose={handleFormClose}
+                />
+            )}
         </div>
     );
 }
-
-export default TransactionList;

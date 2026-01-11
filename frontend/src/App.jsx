@@ -1,71 +1,93 @@
-import { useState, useEffect } from 'react';
-import Dashboard from './components/Dashboard';
-import TransactionForm from './components/TransactionForm';
-import TransactionList from './components/TransactionList';
-import FileManager from './components/FileManager';
-import BankSync from './components/BankSync';
+import React, { useState } from 'react';
 import './App.css';
+import Dashboard from './components/Dashboard';
+import TransactionList from './components/TransactionList';
+import BudgetPlanner from './components/BudgetPlanner';
+import ExcelImport from './components/ExcelImport';
+import RegularTransactions from './components/RegularTransactions';
+import AssetSimulation from './components/AssetSimulation';
 
 function App() {
-    const [activeTab, setActiveTab] = useState('dashboard');
-    const [refreshKey, setRefreshKey] = useState(0);
+    const [currentPage, setCurrentPage] = useState('dashboard');
 
-    const handleTransactionAdded = () => {
-        setRefreshKey(prev => prev + 1);
+    const renderPage = () => {
+        switch (currentPage) {
+            case 'dashboard':
+                return <Dashboard />;
+            case 'transactions':
+                return <TransactionList />;
+            case 'regular':
+                return <RegularTransactions />;
+            case 'budget':
+                return <BudgetPlanner />;
+            case 'simulation':
+                return <AssetSimulation />;
+            case 'excel':
+                return <ExcelImport />;
+            default:
+                return <Dashboard />;
+        }
     };
-
-    const tabs = [
-        { id: 'dashboard', label: '대시보드', icon: '📊' },
-        { id: 'transactions', label: '거래 내역', icon: '📝' },
-        { id: 'add', label: '거래 추가', icon: '➕' },
-        { id: 'sync', label: '은행 동기화', icon: '🏦' },
-        { id: 'files', label: '파일 관리', icon: '📁' },
-    ];
 
     return (
         <div className="app">
-            <header className="app-header">
-                <div className="container">
-                    <h1 className="app-title">
-                        <span className="title-icon">💰</span>
-                        재무 관리 시스템
-                    </h1>
-                    <p className="app-subtitle">당신의 재무 상태를 한눈에</p>
+            {/* Sidebar */}
+            <aside className="sidebar">
+                <div className="sidebar-header">
+                    💰 Finance Manager
                 </div>
-            </header>
 
-            <nav className="app-nav">
-                <div className="container">
-                    <div className="nav-tabs">
-                        {tabs.map(tab => (
-                            <button
-                                key={tab.id}
-                                className={`nav-tab ${activeTab === tab.id ? 'active' : ''}`}
-                                onClick={() => setActiveTab(tab.id)}
-                            >
-                                <span className="tab-icon">{tab.icon}</span>
-                                <span className="tab-label">{tab.label}</span>
-                            </button>
-                        ))}
+                <nav className="nav-menu">
+                    <div
+                        className={`nav-item ${currentPage === 'dashboard' ? 'active' : ''}`}
+                        onClick={() => setCurrentPage('dashboard')}
+                    >
+                        📊 대시보드
+                    </div>
+                    <div
+                        className={`nav-item ${currentPage === 'transactions' ? 'active' : ''}`}
+                        onClick={() => setCurrentPage('transactions')}
+                    >
+                        💳 거래 내역
+                    </div>
+                    <div
+                        className={`nav-item ${currentPage === 'regular' ? 'active' : ''}`}
+                        onClick={() => setCurrentPage('regular')}
+                    >
+                        🔄 정기 거래
+                    </div>
+                    <div
+                        className={`nav-item ${currentPage === 'budget' ? 'active' : ''}`}
+                        onClick={() => setCurrentPage('budget')}
+                    >
+                        📈 재무 계획
+                    </div>
+                    <div
+                        className={`nav-item ${currentPage === 'simulation' ? 'active' : ''}`}
+                        onClick={() => setCurrentPage('simulation')}
+                    >
+                        🎯 자산 분석
+                    </div>
+                    <div
+                        className={`nav-item ${currentPage === 'excel' ? 'active' : ''}`}
+                        onClick={() => setCurrentPage('excel')}
+                    >
+                        📁 Excel 관리
+                    </div>
+                </nav>
+
+                <div style={{ marginTop: 'auto', paddingTop: 'var(--spacing-lg)', borderTop: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
+                        <div>Finance Manager v1.1</div>
+                        <div style={{ marginTop: '0.25rem' }}>© 2026 All rights reserved</div>
                     </div>
                 </div>
-            </nav>
+            </aside>
 
-            <main className="app-main">
-                <div className="container">
-                    {activeTab === 'dashboard' && <Dashboard key={refreshKey} />}
-                    {activeTab === 'transactions' && <TransactionList key={refreshKey} />}
-                    {activeTab === 'add' && <TransactionForm onSuccess={handleTransactionAdded} />}
-                    {activeTab === 'sync' && <BankSync />}
-                    {activeTab === 'files' && <FileManager onUploadSuccess={handleTransactionAdded} />}
-                </div>
+            {/* Main Content */}
+            <main className="main-content">
+                {renderPage()}
             </main>
-
-            <footer className="app-footer">
-                <div className="container">
-                    <p>© 2026 Finance Manager. 개인 재무 관리 시스템.</p>
-                </div>
-            </footer>
         </div>
     );
 }

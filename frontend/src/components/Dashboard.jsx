@@ -1,217 +1,171 @@
-import { useState, useEffect } from 'react';
-import { analyticsAPI } from '../services/api';
-import {
-    LineChart,
-    Line,
-    BarChart,
-    Bar,
-    PieChart,
-    Pie,
-    Cell,
-    XAxis,
-    YAxis,
-    CartesianGrid,
-    Tooltip,
-    Legend,
-    ResponsiveContainer
-} from 'recharts';
+import React, { useState, useEffect } from 'react';
+import { transactionsAPI } from '../api/client';
+import { format } from 'date-fns';
 
-function Dashboard() {
-    const [summary, setSummary] = useState(null);
-    const [categoryData, setCategoryData] = useState([]);
-    const [monthlyTrend, setMonthlyTrend] = useState([]);
+export default function Dashboard() {
+    const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [selectedMonth, setSelectedMonth] = useState(new Date());
 
     useEffect(() => {
-        fetchDashboardData();
-    }, []);
+        fetchStats();
+    }, [selectedMonth]);
 
-    const fetchDashboardData = async () => {
+    const fetchStats = async () => {
         try {
             setLoading(true);
-            const [summaryRes, categoryRes, trendRes] = await Promise.all([
-                analyticsAPI.getSummary(),
-                analyticsAPI.getCategorySummary(),
-                analyticsAPI.getMonthlyTrend({ months: 6 })
+            const year = selectedMonth.getFullYear();
+            const month = selectedMonth.getMonth() + 1;
+
+            const [monthlyData, incomeCategories, expenseCategories] = await Promise.all([
+                transactionsAPI.getMonthlyStats(year, month),
+                transactionsAPI.getCategoryStats(year, month, 'income'),
+                transactionsAPI.getCategoryStats(year, month, 'expense'),
             ]);
 
-            setSummary(summaryRes.data);
-            setCategoryData(categoryRes.data);
-            setMonthlyTrend(trendRes.data.reverse()); // 오래된 순서로 정렬
+            setStats({
+                monthly: monthlyData.data,
+                incomeCategories: incomeCategories.data,
+                expenseCategories: expenseCategories.data,
+            });
         } catch (error) {
-            console.error('대시보드 데이터 로드 실패:', error);
+            console.error('Failed to fetch stats:', error);
         } finally {
             setLoading(false);
         }
     };
 
-    const formatCurrency = (value) => {
-        return new Intl.NumberFormat('ko-KR', {
-            style: 'currency',
-            currency: 'KRW'
-        }).format(value);
-    };
-
-    const COLORS = ['#4c9aff', '#00c9a7', '#36b37e', '#ffab00', '#ff5630', '#6554c0'];
-
     if (loading) {
         return <div className="spinner"></div>;
     }
 
+    if (!stats) {
+        return <div className="card">데이터를 불러올 수 없습니다.</div>;
+    }
+
+    const formatCurrency = (amount) => {
+        return new Intl.NumberFormat('ko-KR', {
+            style: 'currency',
+            currency: 'KRW',
+        }).format(amount);
+    };
+
     return (
-        <div className="dashboard">
-            <h2 className="page-title">재무 대시보드</h2>
-
-            {/* 재무 요약 카드 */}
-            {summary && (
-                <div className="grid grid-3" style={{ marginBottom: '2rem' }}>
-                    <div className="stat-card">
-                        <div className="stat-label">총 수입</div>
-                        <div className="stat-value stat-income">
-                            {formatCurrency(summary.total_income)}
-                        </div>
+        <div>
+            <div className="flex-between mb-4">
+                <h1 style={{ fontSize: '2rem', fontWeight: '700' }}>대시보드</h1>
+                <div className="flex gap-2">
+                    <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => {
+                            const newDate = new Date(selectedMonth);
+                            newDate.setMonth(newDate.getMonth() - 1);
+                            setSelectedMonth(newDate);
+                        }}
+                    >
+                        ← 이전 달
+                    </button>
+                    <div style={{ padding: '0.5rem 1rem', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
+                        {format(selectedMonth, 'yyyy년 MM월')}
                     </div>
-                    <div className="stat-card">
-                        <div className="stat-label">총 지출</div>
-                        <div className="stat-value stat-expense">
-                            {formatCurrency(summary.total_expense)}
-                        </div>
-                    </div>
-                    <div className="stat-card">
-                        <div className="stat-label">순자산</div>
-                        <div className="stat-value stat-net">
-                            {formatCurrency(summary.net_amount)}
-                        </div>
-                    </div>
+                    <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => {
+                            const newDate = new Date(selectedMonth);
+                            newDate.setMonth(newDate.getMonth() + 1);
+                            setSelectedMonth(newDate);
+                        }}
+                    >
+                        다음 달 →
+                    </button>
                 </div>
-            )}
-
-            <div className="grid grid-2">
-                {/* 월별 추세 */}
-                {monthlyTrend.length > 0 && (
-                    <div className="card">
-                        <h3 className="card-title">월별 수입/지출 추세</h3>
-                        <ResponsiveContainer width="100%" height={300}>
-                            <LineChart data={monthlyTrend}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
-                                <XAxis
-                                    dataKey="month"
-                                    stroke="#9aa0a6"
-                                    style={{ fontSize: '0.875rem' }}
-                                />
-                                <YAxis
-                                    stroke="#9aa0a6"
-                                    style={{ fontSize: '0.875rem' }}
-                                    tickFormatter={(value) => `${(value / 1000).toFixed(0)}K`}
-                                />
-                                <Tooltip
-                                    contentStyle={{
-                                        background: '#1e2433',
-                                        border: '1px solid rgba(255,255,255,0.1)',
-                                        borderRadius: '8px',
-                                        color: '#e8eaed'
-                                    }}
-                                    formatter={(value) => formatCurrency(value)}
-                                />
-                                <Legend />
-                                <Line
-                                    type="monotone"
-                                    dataKey="income"
-                                    stroke="#36b37e"
-                                    strokeWidth={2}
-                                    name="수입"
-                                    dot={{ r: 4 }}
-                                    activeDot={{ r: 6 }}
-                                />
-                                <Line
-                                    type="monotone"
-                                    dataKey="expense"
-                                    stroke="#ff5630"
-                                    strokeWidth={2}
-                                    name="지출"
-                                    dot={{ r: 4 }}
-                                    activeDot={{ r: 6 }}
-                                />
-                            </LineChart>
-                        </ResponsiveContainer>
-                    </div>
-                )}
-
-                {/* 카테고리별 지출 */}
-                {categoryData.length > 0 && (
-                    <div className="card">
-                        <h3 className="card-title">카테고리별 지출</h3>
-                        <ResponsiveContainer width="100%" height={300}>
-                            <PieChart>
-                                <Pie
-                                    data={categoryData}
-                                    dataKey="total_amount"
-                                    nameKey="category"
-                                    cx="50%"
-                                    cy="50%"
-                                    outerRadius={100}
-                                    label={(entry) => `${entry.category}`}
-                                    labelLine={{ stroke: '#9aa0a6' }}
-                                >
-                                    {categoryData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                    ))}
-                                </Pie>
-                                <Tooltip
-                                    contentStyle={{
-                                        background: '#1e2433',
-                                        border: '1px solid rgba(255,255,255,0.1)',
-                                        borderRadius: '8px',
-                                        color: '#e8eaed'
-                                    }}
-                                    formatter={(value) => formatCurrency(value)}
-                                />
-                            </PieChart>
-                        </ResponsiveContainer>
-                    </div>
-                )}
             </div>
 
-            {/* 카테고리 상세 테이블 */}
-            {categoryData.length > 0 && (
-                <div className="card" style={{ marginTop: '2rem' }}>
-                    <h3 className="card-title">카테고리별 상세</h3>
-                    <div className="table-container">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>카테고리</th>
-                                    <th>총 금액</th>
-                                    <th>거래 건수</th>
-                                    <th>평균 금액</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {categoryData.map((cat, idx) => (
-                                    <tr key={idx}>
-                                        <td>
-                                            <span style={{
-                                                display: 'inline-block',
-                                                width: '12px',
-                                                height: '12px',
-                                                borderRadius: '50%',
-                                                background: COLORS[idx % COLORS.length],
-                                                marginRight: '0.5rem'
-                                            }}></span>
-                                            {cat.category}
-                                        </td>
-                                        <td style={{ fontWeight: 600 }}>{formatCurrency(cat.total_amount)}</td>
-                                        <td>{cat.transaction_count}건</td>
-                                        <td>{formatCurrency(cat.total_amount / cat.transaction_count)}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+            {/* Stats Cards */}
+            <div className="card-grid">
+                <div className="stat-card income">
+                    <div className="stat-label">총 수입</div>
+                    <div className="stat-value">{formatCurrency(stats.monthly.total_income)}</div>
+                    <div className="stat-change positive">+ {formatCurrency(stats.monthly.total_income)}</div>
+                </div>
+
+                <div className="stat-card expense">
+                    <div className="stat-label">총 지출</div>
+                    <div className="stat-value">{formatCurrency(stats.monthly.total_expense)}</div>
+                    <div className="stat-change negative">- {formatCurrency(stats.monthly.total_expense)}</div>
+                </div>
+
+                <div className="stat-card">
+                    <div className="stat-label">순 금액</div>
+                    <div className="stat-value" style={{ color: stats.monthly.net_amount >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                        {formatCurrency(stats.monthly.net_amount)}
+                    </div>
+                    <div className="stat-change">
+                        {stats.monthly.transaction_count}건의 거래
                     </div>
                 </div>
-            )}
+            </div>
+
+            {/* Category Breakdown */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--spacing-lg)', marginTop: 'var(--spacing-xl)' }}>
+                {/* Income Categories */}
+                <div className="card">
+                    <h2 className="card-title">수입 카테고리</h2>
+                    {stats.incomeCategories.length > 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-sm)' }}>
+                            {stats.incomeCategories.map((cat, idx) => (
+                                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div>
+                                        <div style={{ fontWeight: '500' }}>{cat.category}</div>
+                                        <div style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)' }}>
+                                            {cat.transaction_count}건
+                                        </div>
+                                    </div>
+                                    <div style={{ textAlign: 'right' }}>
+                                        <div style={{ fontWeight: '600', color: 'var(--success)' }}>
+                                            {formatCurrency(cat.total_amount)}
+                                        </div>
+                                        <div style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)' }}>
+                                            {cat.percentage.toFixed(1)}%
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <p style={{ color: 'var(--text-tertiary)' }}>이번 달 수입 내역이 없습니다.</p>
+                    )}
+                </div>
+
+                {/* Expense Categories */}
+                <div className="card">
+                    <h2 className="card-title">지출 카테고리</h2>
+                    {stats.expenseCategories.length > 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-sm)' }}>
+                            {stats.expenseCategories.map((cat, idx) => (
+                                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                    <div>
+                                        <div style={{ fontWeight: '500' }}>{cat.category}</div>
+                                        <div style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)' }}>
+                                            {cat.transaction_count}건
+                                        </div>
+                                    </div>
+                                    <div style={{ textAlign: 'right' }}>
+                                        <div style={{ fontWeight: '600', color: 'var(--danger)' }}>
+                                            {formatCurrency(cat.total_amount)}
+                                        </div>
+                                        <div style={{ fontSize: '0.875rem', color: 'var(--text-tertiary)' }}>
+                                            {cat.percentage.toFixed(1)}%
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <p style={{ color: 'var(--text-tertiary)' }}>이번 달 지출 내역이 없습니다.</p>
+                    )}
+                </div>
+            </div>
         </div>
     );
 }
-
-export default Dashboard;
